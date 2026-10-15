@@ -1,11 +1,26 @@
 <script setup lang="ts">
-import { reactive } from 'vue'
+import { reactive, ref } from 'vue'
 import type { SiteContent } from '@/types'
 import rawContent from '@/content/site.json'
+import { saveContent } from '@/services/github'
 
+// локальная копия контента, которую редактируем
 const content = reactive<SiteContent>(
   JSON.parse(JSON.stringify(rawContent))
 )
+
+// токен берём из localStorage, в коде его нет
+const token = ref(localStorage.getItem('gh_token') ?? '')
+const status = ref<'idle' | 'saving' | 'ok' | 'error'>('idle')
+const errorMsg = ref('')
+const commitUrl = ref('')
+
+// сохранить токен в localStorage (вызывается при потере фокуса поля)
+function saveToken() {
+  const v = token.value.trim()
+  if (v) localStorage.setItem('gh_token', v)
+  else localStorage.removeItem('gh_token')
+}
 
 function addBlock() {
   content.blocks.push({
@@ -19,9 +34,26 @@ function removeBlock(index: number) {
   content.blocks.splice(index, 1)
 }
 
-function save() {
-  console.log('Сохраняем:', JSON.stringify(content, null, 2))
-  alert('Данные готовы к отправке. Смотри консоль.')
+async function save() {
+  if (!token.value.trim()) {
+    status.value = 'error'
+    errorMsg.value = 'Сначала вставь GitHub токен'
+    return
+  }
+
+  status.value = 'saving'
+  errorMsg.value = ''
+  commitUrl.value = ''
+
+  try {
+    const result = await saveContent(content, token.value.trim())
+    status.value = 'ok'
+    commitUrl.value = result.commitUrl
+    console.log('Коммит:', result.commitUrl)
+  } catch (e: any) {
+    status.value = 'error'
+    errorMsg.value = e.message || 'Неизвестная ошибка'
+  }
 }
 </script>
 
@@ -31,6 +63,27 @@ function save() {
       <h1>Админка</h1>
       <RouterLink to="/">← На сайт</RouterLink>
     </header>
+
+    <section class="field token">
+      <label>GitHub token (fine-grained, Contents: RW)</label>
+      <input
+        v-model="token"
+        type="password"
+        placeholder="github_pat_..."
+        autocomplete="off"
+        @change="saveToken"
+        @blur="saveToken"
+      />
+    </section>
+
+    <div v-if="status === 'saving'" class="status">Сохраняем…</div>
+    <div v-if="status === 'ok'" class="status ok">
+      ✅ Сохранено. Коммит:
+      <a :href="commitUrl" target="_blank" rel="noopener">посмотреть на GitHub</a>
+    </div>
+    <div v-if="status === 'error'" class="status err">
+      ❌ {{ errorMsg }}
+    </div>
 
     <section class="field">
       <label>Заголовок сайта</label>
@@ -118,4 +171,21 @@ button.add {
 .actions { text-align: right; }
 button.save { background: #1f6feb; color: #fff; border: none; padding: 10px 24px; }
 button.save:hover { background: #1858c4; }
+
+.field.token {
+  background: #fff8e1;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid #f0e0a0;
+}
+.status {
+  padding: 10px 12px;
+  border-radius: 6px;
+  margin-bottom: 16px;
+  font-size: 14px;
+}
+.status.ok  { background: #e6f4ea; color: #1e7d32; }
+.status.err { background: #fdecea; color: #b00020; }
+.status a { color: inherit; }
+
 </style>
