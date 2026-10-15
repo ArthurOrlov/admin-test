@@ -1,0 +1,15 @@
+<script setup lang="ts"></script>
+
+<template>
+  <RouterView />
+</template>
+
+<style>
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, sans-serif;
+  color: #222;
+  background: #fff;
+}
+</style>
